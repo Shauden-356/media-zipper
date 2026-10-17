@@ -14,6 +14,28 @@ const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 const MAX_ITEMS = 500;
 
+function isYouTubeUrl(value) {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host === 'youtu.be' || host.endsWith('.youtu.be') ||
+      host === 'youtube.com' || host.endsWith('.youtube.com') ||
+      host === 'youtube-nocookie.com' || host.endsWith('.youtube-nocookie.com');
+  } catch {
+    return false;
+  }
+}
+
+function hasYouTubeEmbed(html, baseUrl) {
+  const $ = cheerio.load(html);
+  return $('iframe[src]').toArray().some((el) => {
+    try {
+      return isYouTubeUrl(new URL(el.attribs.src, baseUrl).href);
+    } catch {
+      return false;
+    }
+  });
+}
+
 // Runs inside the page: reads media from the live DOM, computed styles,
 // pseudo-elements and shadow roots (things that only exist after scripts run).
 function collectFromDom() {
@@ -192,7 +214,11 @@ async function renderPage(startUrl, deadline) {
 
     const html = await page.content();
     const title = await page.title().catch(() => '');
-    return { finalUrl: page.url(), html, title, domItems, netItems, netStreams: [...netStreams] };
+    const finalUrl = page.url();
+    const youtubeEmbed =
+      page.frames().some((frame) => frame !== page.mainFrame() && isYouTubeUrl(frame.url())) ||
+      hasYouTubeEmbed(html, finalUrl);
+    return { finalUrl, html, title, domItems, netItems, netStreams: [...netStreams], youtubeEmbed };
   } finally {
     await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
   }
@@ -210,7 +236,12 @@ async function basicScan(startUrl) {
   const root = baseHref ? new URL(baseHref, finalUrl).href : finalUrl;
   const collector = makeCollector(root);
   extractFromDocument($, collector, html);
-  return { collector, finalUrl, title: $('title').first().text().trim() };
+  return {
+    collector,
+    finalUrl,
+    title: $('title').first().text().trim(),
+    youtubeEmbed: hasYouTubeEmbed(html, finalUrl),
+  };
 }
 
 export default async function handler(req, res) {
@@ -234,11 +265,13 @@ export default async function handler(req, res) {
   let collector;
   let pageUrl = start;
   let title = '';
+  let youtubeEmbed = false;
 
   try {
     const r = await renderPage(start, deadline);
     pageUrl = r.finalUrl;
     title = r.title;
+    youtubeEmbed = r.youtubeEmbed;
     collector = makeCollector(r.finalUrl);
     r.domItems.forEach(([u, k]) => collector.add(u, k)); // live DOM first: best kind hints
     extractFromDocument(cheerio.load(r.html), collector, r.html);
@@ -251,6 +284,7 @@ export default async function handler(req, res) {
       collector = b.collector;
       pageUrl = b.finalUrl;
       title = b.title;
+      youtubeEmbed = b.youtubeEmbed;
       mode = 'basic';
       notes.push(
         'The browser scanner could not run, so this was a basic scan. It misses media that scripts load after the page opens.'
@@ -274,6 +308,9 @@ export default async function handler(req, res) {
     .slice(0, 12)
     .map((u) => ({ url: u, name: nameOf(u) }));
   if (allStreams.some(isDash)) notes.push('This page also uses DASH (.mpd) streams, which are not supported.');
+  if (youtubeEmbed) {
+    notes.push('This page embeds a YouTube video. YouTube media cannot be downloaded here; use YouTube options where available or a copy provided by the rights holder.');
+  }
   if (!streams.length && collector.blobMedia()) {
     notes.push(
       'This page plays video through an in-page player that does not expose a file or playlist address, so it cannot be saved.'

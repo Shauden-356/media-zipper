@@ -13,15 +13,26 @@ const WINDOW = 4; // segments downloaded ahead, in parallel
 // (FFmpeg's stdin). Every request goes through safeFetch, so playlists can't
 // point FFmpeg at internal addresses or local files.
 async function feed(playlist, sink, ctx, referer) {
-  const urls = [playlist.map, ...playlist.segments].filter(Boolean);
+  const urls = [
+    ...(playlist.map ? [{ url: playlist.map, range: playlist.mapRange }] : []),
+    ...playlist.segments.map((url, i) => ({ url, range: playlist.segmentRanges[i] })),
+  ];
 
-  const get = async (u) => {
+  const get = async ({ url, range }) => {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const r = await safeFetch(u, { referer, timeout: 20000 });
+        const r = await safeFetch(url, {
+          referer,
+          timeout: 20000,
+          range: range ? `bytes=${range.start}-${range.end}` : undefined,
+        });
         if (!r.ok) {
           r.body?.cancel();
           continue;
+        }
+        if (range && r.status !== 206) {
+          r.body?.cancel();
+          return null;
         }
         if (Number(r.headers.get('content-length') || 0) > MAX_SEGMENT) {
           r.body?.cancel();
