@@ -73,8 +73,6 @@ async function feed(playlist, sink, ctx, referer) {
   }
 }
 
-<<<<<<< HEAD
-=======
 async function feedDirect(url, sink, ctx, referer) {
   try {
     const response = await safeFetch(url, { referer, timeout: TIME_BUDGET_MS });
@@ -105,7 +103,6 @@ async function feedDirect(url, sink, ctx, referer) {
   }
 }
 
->>>>>>> 68be324 (Initial commit)
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Use GET.' });
 
@@ -118,17 +115,6 @@ export default async function handler(req, res) {
   }
   const referer = typeof page === 'string' && /^https?:\/\//i.test(page) ? page : undefined;
 
-<<<<<<< HEAD
-  let stream;
-  try {
-    stream = await resolveStream(url, referer);
-  } catch (err) {
-    const msg = err?.name === 'TimeoutError' ? 'The stream took too long to respond.' : err.message;
-    return res.status(422).json({ error: msg });
-  }
-
-  if (check) {
-=======
   const direct = req.query.direct === '1';
   let stream;
   if (!direct) {
@@ -141,7 +127,6 @@ export default async function handler(req, res) {
   }
 
   if (check && !direct) {
->>>>>>> 68be324 (Initial commit)
     return res.status(200).json({
       ok: true,
       segments: stream.video.segments.length,
@@ -154,26 +139,6 @@ export default async function handler(req, res) {
     .replace(/[^\w\- ]+/g, '_')
     .slice(0, 80);
 
-<<<<<<< HEAD
-  // Segments are remuxed (copied, not re-encoded) into a fragmented MP4 that can be
-  // written to a pipe, the same "-c copy" approach as the desktop tool.
-  const args = [
-    '-hide_banner', '-loglevel', 'error',
-    '-i', 'pipe:0',
-    ...(stream.audio ? ['-i', 'pipe:3'] : []),
-    '-map', '0:v:0?',
-    '-map', stream.audio ? '1:a:0?' : '0:a:0?',
-    '-sn', '-dn',
-    '-c', 'copy',
-    // AAC from MPEG-TS needs this fix when piped; other audio codecs must not get it.
-    ...(stream.aac ? ['-bsf:a', 'aac_adtstoasc'] : []),
-    '-movflags', 'frag_keyframe+empty_moov+delay_moov+default_base_moof',
-    '-f', 'mp4',
-    'pipe:1',
-  ];
-  const ff = spawn(process.env.FFMPEG_PATH || ffmpegPath, args, {
-    stdio: ['pipe', 'pipe', 'pipe', ...(stream.audio ? ['pipe'] : [])],
-=======
   // Remux without re-encoding. Matroska accepts a wider range of direct-file codecs;
   // HLS continues to use fragmented MP4 for browser-friendly downloads.
   const args = direct
@@ -200,7 +165,6 @@ export default async function handler(req, res) {
       ];
   const ff = spawn(process.env.FFMPEG_PATH || ffmpegPath, args, {
     stdio: ['pipe', 'pipe', 'pipe', ...(!direct && stream.audio ? ['pipe'] : [])],
->>>>>>> 68be324 (Initial commit)
   });
 
   const ctx = { stopped: false, truncated: false, skipped: 0, bytes: 0, deadline: Date.now() + TIME_BUDGET_MS };
@@ -221,37 +185,23 @@ export default async function handler(req, res) {
   // Don't commit to a download until FFmpeg produces its first output.
   ff.stdout.once('data', (first) => {
     sentData = true;
-<<<<<<< HEAD
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}.mp4"`);
-=======
     const extension = direct ? 'mkv' : 'mp4';
     res.setHeader('Content-Type', direct ? 'video/x-matroska' : 'video/mp4');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}.${extension}"`);
->>>>>>> 68be324 (Initial commit)
     res.write(first);
     ff.stdout.pipe(res);
   });
 
-<<<<<<< HEAD
-  const feeds = [feed(stream.video, ff.stdin, ctx, referer)];
-  if (stream.audio) feeds.push(feed(stream.audio, ff.stdio[3], ctx, referer));
-=======
   const feeds = direct
     ? [feedDirect(url, ff.stdin, ctx, referer)]
     : [feed(stream.video, ff.stdin, ctx, referer)];
   if (!direct && stream.audio) feeds.push(feed(stream.audio, ff.stdio[3], ctx, referer));
->>>>>>> 68be324 (Initial commit)
   await Promise.all(feeds);
   await closed;
 
   if (!sentData && !res.headersSent) {
     return res.status(502).json({
-<<<<<<< HEAD
-      error: `FFmpeg could not convert this stream. ${errText.trim()}`.trim(),
-=======
       error: `${direct ? 'FFmpeg could not convert this video.' : 'FFmpeg could not convert this stream.'} ${ctx.error || errText.trim()}`.trim(),
->>>>>>> 68be324 (Initial commit)
     });
   }
 }
