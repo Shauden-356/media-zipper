@@ -242,8 +242,13 @@
     </div>
     <div class="grid" id="grid"></div>
     <div class="streams" id="streams" hidden>
+<<<<<<< HEAD
       <h3>Streamed videos</h3>
       <p class="note" style="margin-top:0">This page plays video as a stream. Each one can be saved as a single MP4 (video and audio, no re-encoding). Encrypted streams are not supported.</p>
+=======
+      <h3>Video downloads</h3>
+      <p class="note" style="margin-top:0">Direct videos are remuxed to MKV; HLS streams are saved as MP4. Both are copied without re-encoding. Server downloads may stop after about a minute.</p>
+>>>>>>> 68be324 (Initial commit)
       <ul id="streamList"></ul>
     </div>
     <p class="note" id="notes"></p>
@@ -343,8 +348,17 @@
 
   function renderStreams() {
     const box = $('#streams'), list = $('#streamList');
+<<<<<<< HEAD
     box.hidden = !streams.length;
     list.replaceChildren(...streams.map((st) => {
+=======
+    const videos = [
+      ...items.filter((it) => it.kind === 'video').map((it) => ({ ...it, direct: true })),
+      ...streams,
+    ];
+    box.hidden = !videos.length;
+    list.replaceChildren(...videos.map((st) => {
+>>>>>>> 68be324 (Initial commit)
       const li = document.createElement('li');
       const src = document.createElement('div');
       src.className = 'src';
@@ -352,13 +366,31 @@
       src.title = st.url;
       const btn = document.createElement('button');
       btn.type = 'button';
+<<<<<<< HEAD
       btn.textContent = 'Save as MP4';
+=======
+      btn.textContent = st.direct ? 'Save video' : 'Save as MP4';
+>>>>>>> 68be324 (Initial commit)
       const msg = document.createElement('div');
       msg.className = 'msg';
       msg.hidden = true;
       const say = (t, err = false) => { msg.hidden = false; msg.textContent = t; msg.className = 'msg' + (err ? ' error' : ''); };
       btn.onclick = async () => {
         btn.disabled = true;
+<<<<<<< HEAD
+=======
+        if (st.direct) {
+          const label = st.name.replace(/\.[^.]+$/, '') || pageTitle || 'video';
+          const a = document.createElement('a');
+          a.href = '/api/stream?' + new URLSearchParams({ url: st.url, page, name: label, direct: '1' });
+          document.body.append(a);
+          a.click();
+          a.remove();
+          say('Download started. The video will be saved as an MKV file.');
+          btn.disabled = false;
+          return;
+        }
+>>>>>>> 68be324 (Initial commit)
         say('Checking the stream…');
         const q = new URLSearchParams({ url: st.url, page });
         try {
