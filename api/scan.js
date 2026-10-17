@@ -19,7 +19,8 @@ function isYouTubeUrl(value) {
     const host = new URL(value).hostname.toLowerCase();
     return host === 'youtu.be' || host.endsWith('.youtu.be') ||
       host === 'youtube.com' || host.endsWith('.youtube.com') ||
-      host === 'youtube-nocookie.com' || host.endsWith('.youtube-nocookie.com');
+      host === 'youtube-nocookie.com' || host.endsWith('.youtube-nocookie.com') ||
+      host === 'googlevideo.com' || host.endsWith('.googlevideo.com');
   } catch {
     return false;
   }
@@ -116,6 +117,7 @@ async function renderPage(startUrl, deadline) {
         if (!(await allowed(u))) return await req.abort('blockedbyclient');
         const type = req.resourceType();
         if (type === 'media') {
+          if (isYouTubeUrl(u)) return await req.abort('blockedbyclient');
           // Record the URL but don't download the whole video/audio here.
           const k = kindOf(u, 'video');
           if (k === 'stream') netStreams.add(u);
@@ -138,6 +140,7 @@ async function renderPage(startUrl, deadline) {
       try {
         const url = res.url();
         if (!/^https?:/i.test(url) || res.status() >= 400) return;
+        if (isYouTubeUrl(url)) return;
         const h = res.headers();
         const rt = res.request().resourceType();
         const ct = h['content-type'] || '';
@@ -201,7 +204,21 @@ async function renderPage(startUrl, deadline) {
     } catch {
       /* page navigated away or blocked scripting */
     }
-    await new Promise((r) => setTimeout(r, 1500));
+    // Native players often request their HLS manifest only after playback starts.
+    await Promise.allSettled(
+      page.frames()
+        .filter((frame) => !isYouTubeUrl(frame.url()))
+        .map((frame) =>
+          frame.evaluate(() => {
+            for (const video of document.querySelectorAll('video')) {
+              video.muted = true;
+              video.playsInline = true;
+              video.play().catch(() => {});
+            }
+          })
+        )
+    );
+    await new Promise((r) => setTimeout(r, 2000));
 
     const domItems = [];
     for (const frame of page.frames()) {
