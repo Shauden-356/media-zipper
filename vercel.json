@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/scan.js": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
+    },
+    "api/zip.js": { "maxDuration": 60 },
+    "api/stream.js": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
+    }
+  }
+}
